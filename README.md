@@ -1,3 +1,12 @@
+I forked it because the original author has not updated it for a while. I have fixed some bugs according to [origin issue#107](https://github.com/openrecall/openrecall/issues/107) and try to make it better. I hope it will be helpful to you.
+
+## todo list
+- [ ] make a simple executable file to install
+- [ ] make a pyproject.toml for packaging
+- [ ] add support for Python 3.13 and above
+- [ ] make it more accurate
+- [ ] run on GPU if needed
+------
 ```
    ____                   ____                  ____   
   / __ \____  ___  ____  / __ \___  _________ _/ / /   
@@ -8,8 +17,6 @@
 ```
 **Enjoy this project?** Show your support by starring it! ⭐️ Thank you!
 
-Join our [Discord](https://discord.gg/RzvCYRgUkx) and/or [Telegram](https://t.me/+5DULWTesqUYwYjY0) community to stay informed of updates!
-
 # Take Control of Your Digital Memory
 
 OpenRecall is a fully open-source, privacy-first alternative to proprietary solutions like Microsoft's Windows Recall or Limitless' Rewind.ai. With OpenRecall, you can easily access your digital history, enhancing your memory and productivity without compromising your privacy.
@@ -18,7 +25,7 @@ OpenRecall is a fully open-source, privacy-first alternative to proprietary solu
 
 OpenRecall captures your digital history through regularly taken snapshots, which are essentially screenshots. The text and images within these screenshots are analyzed and made searchable, allowing you to quickly find specific information by typing relevant keywords into OpenRecall. You can also manually scroll back through your history to revisit past activities.
 
-https://github.com/openrecall/openrecall/assets/16676419/cfc579cb-165b-43e4-9325-9160da6487d2
+https://github.com/cute-omega/openrecall/assets/16676419/cfc579cb-165b-43e4-9325-9160da6487d2
 
 ## Why Choose OpenRecall?
 
@@ -51,28 +58,27 @@ OpenRecall offers several key advantages over closed-source alternatives:
 
 
 
-| Feature          | OpenRecall                    | Windows Recall                                  | Rewind.ai                              |
-|------------------|-------------------------------|--------------------------------------------------|----------------------------------------|
-| Transparency     | Open-source                   | Closed-source                                    | Closed-source                          |
-| Supported Hardware | All                         | Copilot+ certified Windows hardware              | M1/M2 Apple Silicon                    |
-| OS Support       | Windows, macOS, Linux         | Windows                                          | macOS                                  |
-| Privacy          | On-device, self-hosted        | Microsoft's privacy policy applies               | Connected to ChatGPT                   |
-| Cost             | Free                          | Part of Windows 11 (requires specialized hardware) | Monthly subscription                   |
+| Feature            | OpenRecall             | Windows Recall                                     | Rewind.ai            |
+|--------------------|------------------------|----------------------------------------------------|----------------------|
+| Transparency       | Open-source            | Closed-source                                      | Closed-source        |
+| Supported Hardware | All                    | Copilot+ certified Windows hardware                | M1/M2 Apple Silicon  |
+| OS Support         | Windows, macOS, Linux  | Windows                                            | macOS                |
+| Privacy            | On-device, self-hosted | Microsoft's privacy policy applies                 | Connected to ChatGPT |
+| Cost               | Free                   | Part of Windows 11 (requires specialized hardware) | Monthly subscription |
 
 ## Quick links
-- [Roadmap](https://github.com/orgs/openrecall/projects/2) and you can [vote for your favorite features](https://github.com/openrecall/openrecall/discussions/9#discussion-6775473)
 - [FAQ](https://github.com/openrecall/openrecall/wiki/FAQ)
 
 ## Get Started
 
 ### Prerequisites
-- Python 3.11
+- Python 3.9-3.12
 - MacOSX/Windows/Linux
 - Git
 
 To install:
 ```
-python3 -m pip install --upgrade --no-cache-dir git+https://github.com/openrecall/openrecall.git
+python3 -m pip install --upgrade --no-cache-dir git+https://github.com/cute-omega/openrecall.git
 ```
 
 To run:
@@ -98,15 +104,15 @@ To uninstall OpenRecall and remove all stored data:
 
 2. Remove stored data:
    - On Windows:
-     ```
+     ```batch
      rmdir /s %APPDATA%\openrecall
      ```
    - On macOS:
-     ```
+     ```shell
      rm -rf ~/Library/Application\ Support/openrecall
      ```
    - On Linux:
-     ```
+     ```shell
      rm -rf ~/.local/share/openrecall
      ```
 
@@ -116,10 +122,6 @@ Note: If you specified a custom storage path at any time using the `--storage-pa
 
 As an open-source project, we welcome contributions from the community. If you'd like to help improve OpenRecall, please submit a pull request or open an issue on our GitHub repository.
 
-## Contact the maintainers
-mail@datatalk.be
-
 ## License
 
 OpenRecall is released under the [AGPLv3](https://opensource.org/licenses/AGPL-3.0), ensuring that it remains open and accessible to everyone.
-

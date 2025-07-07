@@ -1,6 +1,10 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import os
 import logging
+
+from sentence_transformers import SentenceTransformer
+
+from openrecall.config import model_cache_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,11 +16,21 @@ EMBEDDING_DIM: int = 384  # Dimension for all-MiniLM-L6-v2
 
 # Load the model globally to avoid reloading it on every call
 try:
-    model = SentenceTransformer(MODEL_NAME)
+    model = get_model(MODEL_NAME)
     logger.info(f"SentenceTransformer model '{MODEL_NAME}' loaded successfully.")
 except Exception as e:
     logger.error(f"Failed to load SentenceTransformer model '{MODEL_NAME}': {e}")
     model = None
+
+
+def get_model(model_name):
+    cache_path = os.path.join(model_cache_path, model_name)
+    if os.path.isdir(cache_path):
+        return SentenceTransformer(cache_path)
+    else:
+        model = SentenceTransformer(model_name)
+        model.save(cache_path)
+        return model
 
 
 def get_embedding(text: str) -> np.ndarray:
@@ -47,7 +61,9 @@ def get_embedding(text: str) -> np.ndarray:
     sentences = [line for line in text.split("\n") if line.strip()]
 
     if not sentences:
-        logger.warning("No non-empty lines found after splitting. Returning zero vector.")
+        logger.warning(
+            "No non-empty lines found after splitting. Returning zero vector."
+        )
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
     try:
@@ -76,7 +92,9 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     norm_b = np.linalg.norm(b)
 
     if norm_a == 0 or norm_b == 0:
-        logger.warning("One or both vectors have zero magnitude. Returning 0 similarity.")
+        logger.warning(
+            "One or both vectors have zero magnitude. Returning 0 similarity."
+        )
         return 0.0
 
     similarity = np.dot(a, b) / (norm_a * norm_b)

@@ -1,6 +1,6 @@
 import os
 import time
-from typing import List, Tuple
+from typing import List
 
 import mss
 import numpy as np
@@ -63,7 +63,13 @@ def is_similar(
     Returns:
         True if the images are similar, False otherwise.
     """
+    """
     similarity: float = mean_structured_similarity_index(img1, img2)
+    """
+    # Compress images to reduce size and improve performance
+    compress_img1: np.ndarray = resize_image(img1)
+    compress_img2: np.ndarray = resize_image(img2)
+    similarity: float = mean_structured_similarity_index(compress_img1, compress_img2)
     return similarity >= similarity_threshold
 
 
@@ -129,20 +135,21 @@ def record_screenshots_thread() -> None:
         # Ensure we have a last_screenshot for each current_screenshot
         # This handles cases where monitor setup might change (though unlikely mid-run)
         if len(last_screenshots) != len(current_screenshots):
-             # If monitor count changes, reset last_screenshots and continue
-             last_screenshots = current_screenshots
-             time.sleep(3)
-             continue
-
+            # If monitor count changes, reset last_screenshots and continue
+            last_screenshots = current_screenshots
+            time.sleep(3)
+            continue
 
         for i, current_screenshot in enumerate(current_screenshots):
             last_screenshot = last_screenshots[i]
 
             if not is_similar(current_screenshot, last_screenshot):
-                last_screenshots[i] = current_screenshot  # Update the last screenshot for this monitor
+                last_screenshots[i] = (
+                    current_screenshot  # Update the last screenshot for this monitor
+                )
                 image = Image.fromarray(current_screenshot)
                 timestamp = int(time.time())
-                filename = f"{timestamp}_{i}.webp" # Add monitor index to filename for uniqueness
+                filename = f"{timestamp}_{i}.webp"  # Add monitor index to filename for uniqueness
                 filepath = os.path.join(screenshots_path, filename)
                 image.save(
                     filepath,
@@ -154,12 +161,14 @@ def record_screenshots_thread() -> None:
                 if text.strip():
                     embedding: np.ndarray = get_embedding(text)
                     active_app_name: str = get_active_app_name() or "Unknown App"
-                    active_window_title: str = get_active_window_title() or "Unknown Title"
+                    active_window_title: str = (
+                        get_active_window_title() or "Unknown Title"
+                    )
                     insert_entry(
-                        text, timestamp, embedding, active_app_name, active_window_title, filename # Pass filename
+                        text, timestamp, embedding, active_app_name, active_window_title
                     )
 
-        time.sleep(3) # Wait before taking the next screenshot
+        time.sleep(3)  # Wait before taking the next screenshot
 
     return screenshots
 
@@ -192,14 +201,30 @@ def record_screenshots_thread():
                     format="webp",
                     lossless=True,
                 )
-                text: str = extract_text_from_image(current_screenshot)
+                text: str = extract_text_from_image(screenshot)
                 # Only proceed if OCR actually extracts text
                 if text.strip():
                     embedding: np.ndarray = get_embedding(text)
                     active_app_name: str = get_active_app_name() or "Unknown App"
-                    active_window_title: str = get_active_window_title() or "Unknown Title"
+                    active_window_title: str = (
+                        get_active_window_title() or "Unknown Title"
+                    )
                     insert_entry(
-                        text, timestamp, embedding, active_app_name, active_window_title, filename # Pass filename
+                        text, timestamp, embedding, active_app_name, active_window_title
                     )
 
-        time.sleep(3) # Wait before taking the next screenshot
+        time.sleep(3)  # Wait before taking the next screenshot
+
+
+def resize_image(image: np.ndarray, max_dim: int = 800) -> np.ndarray:
+    """
+    Resizes an image to fit within a maximum dimension while maintaining aspect ratio.
+    Args:
+        image: The input image as a NumPy array (RGB).
+        max_dim: The maximum dimension for resizing.
+    Returns:
+        The resized image as a NumPy array (RGB).
+    """
+    pil_image = Image.fromarray(image)
+    pil_image.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+    return np.array(pil_image)
