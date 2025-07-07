@@ -1,4 +1,4 @@
-I forked it because the original author has not updated it for a while. I have fixed some bugs according to [origin issue#107](https://github.com/openrecall/openrecall/issues/107) and try to make it better. I hope it will be helpful to you.
+I forked it because the original author has not updated it for a while. I have fixed some bugs according to [origin issue#107](https://github.com/openrecall/openrecall/issues/107) & [origin issue#104](https://github.com/openrecall/openrecall/issues/104) and try to make it better. I hope it will be helpful to you.
 
 ## todo list
 - [ ] make a simple executable file to install
