@@ -14,14 +14,6 @@ logger = logging.getLogger(__name__)
 MODEL_NAME: str = "all-MiniLM-L6-v2"
 EMBEDDING_DIM: int = 384  # Dimension for all-MiniLM-L6-v2
 
-# Load the model globally to avoid reloading it on every call
-try:
-    model = get_model(MODEL_NAME)
-    logger.info(f"SentenceTransformer model '{MODEL_NAME}' loaded successfully.")
-except Exception as e:
-    logger.error(f"Failed to load SentenceTransformer model '{MODEL_NAME}': {e}")
-    model = None
-
 
 def get_model(model_name):
     cache_path = os.path.join(model_cache_path, model_name)
@@ -31,6 +23,15 @@ def get_model(model_name):
         model = SentenceTransformer(model_name)
         model.save(cache_path)
         return model
+
+
+# Load the model globally to avoid reloading it on every call
+try:
+    model = get_model(MODEL_NAME)
+    logger.info(f"SentenceTransformer model '{MODEL_NAME}' loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load SentenceTransformer model '{MODEL_NAME}': {e}")
+    model = None
 
 
 def get_embedding(text: str) -> np.ndarray:
