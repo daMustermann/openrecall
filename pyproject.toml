@@ -1,0 +1,34 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=61.0", "wheel"]
+
+[project]
+dependencies = [
+  "Flask==3.0.3",
+  "numpy==1.26.4",
+  "mss==9.0.1",
+  "sentence-transformers==3.0.0",
+  "torch==2.6.0",
+  "torchvision>=0.17.0",
+  "shapely==2.0.4",
+  "h5py==3.11.0",
+  "rapidfuzz==3.9.3",
+  "Pillow==10.3.0",
+  "python-doctr @ git+https://github.com/koenvaneijk/doctr.git@af711bc04eb8876a7189923fb51ec44481ee18cd",
+]
+description = "OpenRecall"
+license = {text = "AGPL-3.0"}
+name = "OpenRecall"
+readme = "README.md"
+requires-python = ">=3.9"
+version = "0.8"
+
+[project.optional-dependencies]
+linux = []
+macos = ["pyobjc==10.3"]
+windows = ["pywin32", "psutil"]
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+include = ["openrecall*"]
+where = ["."]
