@@ -1,6 +1,7 @@
 import os
 import time
 from typing import List
+import threading
 
 import mss
 import numpy as np
@@ -16,6 +17,8 @@ from openrecall.utils import (
     is_user_active,
 )
 
+# A global flag to control the recording state
+recording_paused = threading.Event()
 
 def mean_structured_similarity_index(
     img1: np.ndarray, img2: np.ndarray, L: int = 255
@@ -126,6 +129,10 @@ def record_screenshots_thread() -> None:
     last_screenshots: List[np.ndarray] = take_screenshots()
 
     while True:
+        if recording_paused.is_set():
+            time.sleep(1)
+            continue
+
         if not is_user_active():
             time.sleep(3)  # Wait longer if user is inactive
             continue
@@ -156,7 +163,7 @@ def record_screenshots_thread() -> None:
                     format="webp",
                     lossless=True,
                 )
-                text: str = extract_text_from_image(current_screenshot)
+                text, language = extract_text_from_image(current_screenshot)
                 # Only proceed if OCR actually extracts text
                 if text.strip():
                     embedding: np.ndarray = get_embedding(text)
@@ -165,56 +172,15 @@ def record_screenshots_thread() -> None:
                         get_active_window_title() or "Unknown Title"
                     )
                     insert_entry(
-                        text, timestamp, embedding, active_app_name, active_window_title
+                        text,
+                        timestamp,
+                        embedding,
+                        active_app_name,
+                        active_window_title,
+                        language,
                     )
 
         time.sleep(3)  # Wait before taking the next screenshot
-
-    return screenshots
-
-
-def record_screenshots_thread():
-    # TODO: fix the error from huggingface tokenizers
-    import os
-
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-    last_screenshots = take_screenshots()
-
-    while True:
-        if not is_user_active():
-            time.sleep(3)
-            continue
-
-        screenshots = take_screenshots()
-
-        for i, screenshot in enumerate(screenshots):
-
-            last_screenshot = last_screenshots[i]
-
-            if not is_similar(screenshot, last_screenshot):
-                last_screenshots[i] = screenshot
-                image = Image.fromarray(screenshot)
-                timestamp = int(time.time())
-                image.save(
-                    os.path.join(screenshots_path, f"{timestamp}.webp"),
-                    format="webp",
-                    lossless=True,
-                )
-                text: str = extract_text_from_image(screenshot)
-                # Only proceed if OCR actually extracts text
-                if text.strip():
-                    embedding: np.ndarray = get_embedding(text)
-                    active_app_name: str = get_active_app_name() or "Unknown App"
-                    active_window_title: str = (
-                        get_active_window_title() or "Unknown Title"
-                    )
-                    insert_entry(
-                        text, timestamp, embedding, active_app_name, active_window_title
-                    )
-
-        time.sleep(3)  # Wait before taking the next screenshot
-
 
 def resize_image(image: np.ndarray, max_dim: int = 800) -> np.ndarray:
     """

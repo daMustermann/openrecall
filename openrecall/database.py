@@ -6,7 +6,9 @@ from typing import Any, List, Optional, Tuple
 from openrecall.config import db_path
 
 # Define the structure of a database entry using namedtuple
-Entry = namedtuple("Entry", ["id", "app", "title", "text", "timestamp", "embedding"])
+Entry = namedtuple(
+    "Entry", ["id", "app", "title", "text", "timestamp", "embedding", "language"]
+)
 
 
 def create_db() -> None:
@@ -26,7 +28,8 @@ def create_db() -> None:
                        title TEXT,
                        text TEXT,
                        timestamp INTEGER UNIQUE,
-                       embedding BLOB
+                       embedding BLOB,
+                       language TEXT
                    )"""
             )
             # Add index on timestamp for faster lookups
@@ -52,7 +55,7 @@ def get_all_entries() -> List[Entry]:
             conn.row_factory = sqlite3.Row  # Return rows as dictionary-like objects
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, app, title, text, timestamp, embedding FROM entries ORDER BY timestamp DESC"
+                "SELECT id, app, title, text, timestamp, embedding, language FROM entries ORDER BY timestamp DESC"
             )
             results = cursor.fetchall()
             for row in results:
@@ -68,6 +71,7 @@ def get_all_entries() -> List[Entry]:
                         text=row["text"],
                         timestamp=row["timestamp"],
                         embedding=embedding,
+                        language=row["language"],
                     )
                 )
     except sqlite3.Error as e:
@@ -97,7 +101,12 @@ def get_timestamps() -> List[int]:
 
 
 def insert_entry(
-    text: str, timestamp: int, embedding: np.ndarray, app: str, title: str
+    text: str,
+    timestamp: int,
+    embedding: np.ndarray,
+    app: str,
+    title: str,
+    language: str,
 ) -> Optional[int]:
     """
     Inserts a new entry into the database.
@@ -121,10 +130,10 @@ def insert_entry(
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                """INSERT INTO entries (text, timestamp, embedding, app, title)
-                   VALUES (?, ?, ?, ?, ?)
+                """INSERT INTO entries (text, timestamp, embedding, app, title, language)
+                   VALUES (?, ?, ?, ?, ?, ?)
                    ON CONFLICT(timestamp) DO NOTHING""",  # Avoid duplicates based on timestamp
-                (text, timestamp, embedding_bytes, app, title),
+                (text, timestamp, embedding_bytes, app, title, language),
             )
             conn.commit()
             if cursor.rowcount > 0:  # Check if insert actually happened
@@ -147,3 +156,85 @@ def get_entries_by_time_range(start_time: int, end_time: int) -> List[Entry]:
             (start_time, end_time),
         ).fetchall()
         return [Entry(*result) for result in results]
+
+
+def get_unique_apps() -> List[str]:
+    """
+    Retrieves a list of unique application names from the database.
+
+    Returns:
+        List[str]: A list of unique application names.
+    """
+    apps: List[str] = []
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT app FROM entries ORDER BY app")
+            results = cursor.fetchall()
+            apps = [result[0] for result in results]
+    except sqlite3.Error as e:
+        print(f"Database error while fetching unique apps: {e}")
+    return apps
+
+
+def get_unique_languages() -> List[str]:
+    """
+    Retrieves a list of unique languages from the database.
+
+    Returns:
+        List[str]: A list of unique languages.
+    """
+    languages: List[str] = []
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT language FROM entries ORDER BY language")
+            results = cursor.fetchall()
+            languages = [result[0] for result in results]
+    except sqlite3.Error as e:
+        print(f"Database error while fetching unique languages: {e}")
+    return languages
+
+
+def get_activity_digest(time_range: str) -> dict:
+    """
+    Retrieves a digest of the user's activity over a given time range.
+
+    Args:
+        time_range (str): The time range for the digest ("day" or "week").
+
+    Returns:
+        dict: A dictionary containing the most frequent apps and words.
+    """
+    if time_range == "day":
+        start_time = int(time.time()) - 86400
+    elif time_range == "week":
+        start_time = int(time.time()) - 604800
+    else:
+        return {}
+
+    digest = {"apps": [], "words": []}
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            # Most frequent apps
+            cursor.execute(
+                "SELECT app, COUNT(*) as count FROM entries WHERE timestamp >= ? GROUP BY app ORDER BY count DESC LIMIT 5",
+                (start_time,),
+            )
+            digest["apps"] = cursor.fetchall()
+            # Most frequent words
+            cursor.execute(
+                "SELECT text FROM entries WHERE timestamp >= ?", (start_time,)
+            )
+            words = " ".join([row[0] for row in cursor.fetchall()]).split()
+            word_counts = {}
+            for word in words:
+                word_counts[word] = word_counts.get(word, 0) + 1
+            sorted_words = sorted(
+                word_counts.items(), key=lambda item: item[1], reverse=True
+            )
+            digest["words"] = sorted_words[:10]
+    except sqlite3.Error as e:
+        print(f"Database error while fetching activity digest: {e}")
+    return digest
