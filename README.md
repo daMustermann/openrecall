@@ -47,7 +47,7 @@ This fork of OpenRecall introduces a host of new features and improvements, incl
 ### Installation
 
 ```bash
-python3 -m pip install --upgrade --no-cache-dir git+https://github.com/cute-omega/openrecall.git
+python3 -m pip install --upgrade --no-cache-dir git+https://github.com/daMustermann/openrecall.git
 ```
 
 ### Running the Application
