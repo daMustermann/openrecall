@@ -4,6 +4,7 @@ ocr = ocr_predictor(
     pretrained=True,
     det_arch="db_mobilenet_v3_large",
     reco_arch="crnn_mobilenet_v3_large",
+    detect_language=True,
 )
 
 
@@ -17,4 +18,4 @@ def extract_text_from_image(image):
                     text += word.value + " "
                 text += "\n"
             text += "\n"
-    return text
+    return text, result.pages[0].language.value

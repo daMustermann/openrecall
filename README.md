@@ -1,122 +1,88 @@
-I forked it because the original author has not updated it for a while. I have fixed some bugs according to [origin issue#107](https://github.com/openrecall/openrecall/issues/107) & [origin issue#104](https://github.com/openrecall/openrecall/issues/104) and try to make it better. I hope it will be helpful to you.
+# OpenRecall - Your Open-Source Digital Memory
 
-## todo list
-- [ ] make a simple executable file to install
-- [ ] make a pyproject.toml for packaging
-- [ ] add support for Python 3.13 and above
-- [ ] make it more accurate
-- [ ] run on GPU if needed
-------
-```
-   ____                   ____                  ____   
-  / __ \____  ___  ____  / __ \___  _________ _/ / /   
- / / / / __ \/ _ \/ __ \/ /_/ / _ \/ ___/ __ `/ / /    
-/ /_/ / /_/ /  __/ / / / _, _/  __/ /__/ /_/ / / /     
-\____/ .___/\___/_/ /_/_/ |_|\___/\___/\__,_/_/_/      
-    /_/                                                                                                                         
-```
-**Enjoy this project?** Show your support by starring it! ⭐️ Thank you!
+![OpenRecall Logo](images/lisa_rewind.webp)
 
-# Take Control of Your Digital Memory
+**Take Control of Your Digital Memory with OpenRecall, a fully open-source, privacy-first alternative to proprietary solutions like Microsoft's Windows Recall or Limitless' Rewind.ai.**
 
-OpenRecall is a fully open-source, privacy-first alternative to proprietary solutions like Microsoft's Windows Recall or Limitless' Rewind.ai. With OpenRecall, you can easily access your digital history, enhancing your memory and productivity without compromising your privacy.
+## What is OpenRecall?
 
-## What does it do?
+OpenRecall captures your digital history through regular screenshots. The text and images within these screenshots are analyzed and made searchable, allowing you to quickly find specific information by typing relevant keywords. You can also manually scroll back through your history to revisit past activities.
 
-OpenRecall captures your digital history through regularly taken snapshots, which are essentially screenshots. The text and images within these screenshots are analyzed and made searchable, allowing you to quickly find specific information by typing relevant keywords into OpenRecall. You can also manually scroll back through your history to revisit past activities.
+## What's New?
 
-https://github.com/cute-omega/openrecall/assets/16676419/cfc579cb-165b-43e4-9325-9160da6487d2
+This fork of OpenRecall introduces a host of new features and improvements, including:
+
+*   **Modern UI/UX:** A complete redesign of the user interface, featuring a sleek, app-like design, dark mode, and improved timeline controls.
+*   **Enhanced Search and Filtering:** Filter your search results by application, language, and date/time.
+*   **"Incognito" or "Pause" Mode:** Temporarily pause screen recording for added privacy.
+*   **Automatic Language Detection:** OpenRecall now automatically detects the language of the text in your screenshots.
+*   **Activity Digest:** Get a summary of your digital activity, including your most used apps and most common words.
+*   **API for External Integration:** A new API endpoint allows for integration with external desktop search tools.
 
 ## Why Choose OpenRecall?
 
-OpenRecall offers several key advantages over closed-source alternatives:
-
-- **Transparency**: OpenRecall is 100% open-source, allowing you to audit the source code for potential backdoors or privacy-invading features.
-- **Cross-platform Support**: OpenRecall works on Windows, macOS, and Linux, giving you the freedom to use it on your preferred operating system.
-- **Privacy-focused**: Your data is stored locally on your device, no internet connection or cloud is required. In addition, you have the option to encrypt the data on a removable disk for added security, read how in our [guide](docs/encryption.md) here. 
-- **Hardware Compatibility**: OpenRecall is designed to work with a [wide range of hardware](docs/hardware.md), unlike proprietary solutions that may require specific certified devices.
-
-<p align="center">
-  <a href="https://twitter.com/elonmusk/status/1792690964672450971" target="_blank">
-    <img src="images/black_mirror.png" alt="Elon Musk Tweet" width="400">
-  </a>
-</p>
-
-## Features
-
-- **Time Travel**: Revisit and explore your past digital activities seamlessly across Windows, macOS, or Linux.
-- **Local-First AI**: OpenRecall harnesses the power of local AI processing to keep your data private and secure.
-- **Semantic Search**: Advanced local OCR interprets your history, providing robust semantic search capabilities.
-- **Full Control Over Storage**: Your data is stored locally, giving you complete control over its management and security.
-
-<p align="center">
-  <img src="images/lisa_rewind.webp" alt="Lisa Rewind" width="400">
-</p>
-
+*   **100% Open-Source:** Audit the source code for potential backdoors or privacy-invading features.
+*   **Cross-Platform:** Works on Windows, macOS, and Linux.
+*   **Privacy-Focused:** Your data is stored locally on your device. No internet connection or cloud is required.
+*   **Hardware Compatibility:** Designed to work with a wide range of hardware.
 
 ## Comparison
 
-
-
-| Feature            | OpenRecall             | Windows Recall                                     | Rewind.ai            |
-|--------------------|------------------------|----------------------------------------------------|----------------------|
-| Transparency       | Open-source            | Closed-source                                      | Closed-source        |
-| Supported Hardware | All                    | Copilot+ certified Windows hardware                | M1/M2 Apple Silicon  |
-| OS Support         | Windows, macOS, Linux  | Windows                                            | macOS                |
-| Privacy            | On-device, self-hosted | Microsoft's privacy policy applies                 | Connected to ChatGPT |
-| Cost               | Free                   | Part of Windows 11 (requires specialized hardware) | Monthly subscription |
-
-## Quick links
-- [FAQ](https://github.com/openrecall/openrecall/wiki/FAQ)
+| Feature | OpenRecall | Windows Recall | Rewind.ai |
+| :--- | :--- | :--- | :--- |
+| **Transparency** | Open-source | Closed-source | Closed-source |
+| **Supported Hardware** | All | Copilot+ certified Windows hardware | M1/M2 Apple Silicon |
+| **OS Support** | Windows, macOS, Linux | Windows | macOS |
+| **Privacy** | On-device, self-hosted | Microsoft's privacy policy applies | Connected to ChatGPT |
+| **Cost** | Free | Part of Windows 11 (requires specialized hardware) | Monthly subscription |
 
 ## Get Started
 
 ### Prerequisites
-- Python 3.9-3.12
-- MacOSX/Windows/Linux
-- Git
 
-To install:
-```
+*   Python 3.9-3.12
+*   MacOSX/Windows/Linux
+*   Git
+
+### Installation
+
+```bash
 python3 -m pip install --upgrade --no-cache-dir git+https://github.com/cute-omega/openrecall.git
 ```
 
-To run:
-```
+### Running the Application
+
+```bash
 python3 -m openrecall.app
 ```
-Open your browser to:
-[http://localhost:8082](http://localhost:8082) to access OpenRecall.
 
-## Arguments
-`--storage-path` (default: user data path for your OS): allows you to specify the path where the screenshots and database should be stored. We recommend [creating an encrypted volume](docs/encryption.md) to store your data.
+Open your browser to `http://localhost:8082` to access OpenRecall.
 
-`--primary-monitor-only` (default: False): only record the primary monitor (rather than individual screenshots for other monitors)
+## New Features in Detail
 
-## Uninstall instructions
+### Modern UI/UX
 
-To uninstall OpenRecall and remove all stored data:
+The user interface has been completely redesigned with a modern, app-like feel. It includes a sidebar for easy navigation, a main content area for displaying your digital history, and a dark mode for comfortable viewing in low-light environments. The timeline controls have also been improved, with a play/pause button and a more intuitive slider.
 
-1. Uninstall the package:
-   ```
-   python3 -m pip uninstall openrecall
-   ```
+### Enhanced Search and Filtering
 
-2. Remove stored data:
-   - On Windows:
-     ```batch
-     rmdir /s %APPDATA%\openrecall
-     ```
-   - On macOS:
-     ```shell
-     rm -rf ~/Library/Application\ Support/openrecall
-     ```
-   - On Linux:
-     ```shell
-     rm -rf ~/.local/share/openrecall
-     ```
+You can now filter your search results by application and language, in addition to the existing time-based filters. This makes it easier than ever to find the information you're looking for.
 
-Note: If you specified a custom storage path at any time using the `--storage-path` argument, make sure to remove that directory too.
+### "Incognito" or "Pause" Mode
+
+Need a moment of privacy? The new "Pause Recording" button allows you to temporarily stop OpenRecall from capturing your screen.
+
+### Automatic Language Detection
+
+OpenRecall now automatically detects the language of the text in your screenshots, making it easier to search for information in multiple languages.
+
+### Activity Digest
+
+The new Activity Digest page provides a summary of your digital activity, including your most used apps and most common words over the last day and week.
+
+### API for External Integration
+
+A new API endpoint at `/api/entries` allows you to access your OpenRecall data in JSON format, opening up the possibility of integrating with external desktop search tools and other applications.
 
 ## Contribute
 

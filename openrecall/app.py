@@ -2,7 +2,7 @@ from threading import Thread
 from datetime import datetime
 
 import numpy as np
-from flask import Flask, render_template_string, request, send_from_directory
+from flask import Flask, jsonify, render_template_string, request, send_from_directory
 from jinja2 import BaseLoader
 
 from openrecall.config import appdata_folder, screenshots_path
@@ -11,9 +11,12 @@ from openrecall.database import (
     get_all_entries,
     get_timestamps,
     get_entries_by_time_range,
+    get_unique_apps,
+    get_unique_languages,
+    get_activity_digest,
 )
 from openrecall.nlp import cosine_similarity, get_embedding
-from openrecall.screenshot import record_screenshots_thread
+from openrecall.screenshot import record_screenshots_thread, recording_paused
 from openrecall.utils import human_readable_time, timestamp_to_human_readable
 
 app = Flask(__name__)
@@ -30,8 +33,77 @@ base_template = """
   <title>OpenRecall</title>
   <!-- Bootstrap CSS -->
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.3.0/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .sidebar {
+      width: 250px;
+      background: #f8f9fa;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #dee2e6;
+    }
+    .sidebar h1 {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+    .sidebar .nav-link {
+      color: #333;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .sidebar .nav-link.active {
+      background-color: #007bff;
+      color: white;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid #dee2e6;
+      background: #fff;
+    }
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .dark-mode {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    .dark-mode .sidebar {
+      background: #1e1e1e;
+      border-right: 1px solid #333;
+    }
+    .dark-mode .sidebar h1, .dark-mode .sidebar .nav-link {
+      color: #e0e0e0;
+    }
+    .dark-mode .sidebar .nav-link.active {
+      background-color: #007bff;
+    }
+    .dark-mode .top-bar {
+      background: #1e1e1e;
+      border-bottom: 1px solid #333;
+    }
+    .dark-mode .card {
+      background-color: #2c2c2c;
+      border: 1px solid #444;
+    }
     .slider-container {
       display: flex;
       flex-direction: column;
@@ -56,34 +128,82 @@ base_template = """
   </style>
 </head>
 <body>
-<nav class="navbar navbar-light bg-light">
-  <div class="container">
-    <form class="form-inline my-2 my-lg-0 w-100 d-flex justify-content-between" action="/search" method="get">
-      <div class="form-group">
-        <input type="text" class="form-control" name="q" placeholder="Search" value="{{ request.args.get('q', '') }}">
+  <div class="sidebar">
+    <h1>OpenRecall</h1>
+    <ul class="nav flex-column">
+      <li class="nav-item">
+        <a class="nav-link active" href="/"><i class="fas fa-home"></i> Timeline</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/search"><i class="fas fa-search"></i> Search</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/digest"><i class="fas fa-chart-line"></i> Activity Digest</a>
+      </li>
+    </ul>
+    <div class="mt-auto">
+      <button id="pauseBtn" class="btn btn-secondary btn-block mb-2">Pause Recording</button>
+      <div class="custom-control custom-switch">
+        <input type="checkbox" class="custom-control-input" id="darkSwitch">
+        <label class="custom-control-label" for="darkSwitch">Dark Mode</label>
       </div>
-      <div class="form-group mx-sm-3">
-        <label for="start_time" class="mr-2">Start Time</label>
-        <input type="datetime-local" class="form-control" name="start_time" value="{{ request.args.get('start_time', '') }}">
-      </div>
-      <div class="form-group mx-sm-3">
-        <label for="end_time" class="mr-2">End Time</label>
-        <input type="datetime-local" class="form-control" name="end_time" value="{{ request.args.get('end_time', '') }}">
-      </div>
-      <button class="btn btn-outline-secondary my-2 my-sm-0" type="submit">
-        <i class="bi bi-search"></i>
-      </button>
-    </form>
+    </div>
   </div>
-</nav>
-{% block content %}
 
-{% endblock %}
+  <div class="main-content">
+    <div class="top-bar">
+      <form class="form-inline my-2 my-lg-0 w-100 d-flex" action="/search" method="get">
+        <input type="text" class="form-control flex-grow-1" name="q" placeholder="Search..." value="{{ request.args.get('q', '') }}">
+        <select class="form-control mx-2" name="app">
+          <option value="">All Apps</option>
+          {% for app in apps %}
+            <option value="{{ app }}" {% if request.args.get('app') == app %}selected{% endif %}>{{ app }}</option>
+          {% endfor %}
+        </select>
+        <select class="form-control mx-2" name="language">
+          <option value="">All Languages</option>
+          {% for lang in languages %}
+            <option value="{{ lang }}" {% if request.args.get('language') == lang %}selected{% endif %}>{{ lang }}</option>
+          {% endfor %}
+        </select>
+        <input type="datetime-local" class="form-control mx-2" name="start_time" value="{{ request.args.get('start_time', '') }}">
+        <input type="datetime-local" class="form-control mx-2" name="end_time" value="{{ request.args.get('end_time', '') }}">
+        <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
+      </form>
+    </div>
+    <div class="content-area">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
 
-  <!-- Bootstrap and jQuery JS -->
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script>
+    const darkSwitch = document.getElementById('darkSwitch');
+    const body = document.body;
+
+    // Apply the cached theme on load
+    const isDarkMode = localStorage.getItem('darkMode') === 'true';
+    if (isDarkMode) {
+      body.classList.add('dark-mode');
+      darkSwitch.checked = true;
+    }
+
+    darkSwitch.addEventListener('change', () => {
+      body.classList.toggle('dark-mode');
+      localStorage.setItem('darkMode', darkSwitch.checked);
+    });
+
+    const pauseBtn = document.getElementById('pauseBtn');
+    pauseBtn.addEventListener('click', () => {
+      fetch('/pause', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          pauseBtn.textContent = data.paused ? 'Resume Recording' : 'Pause Recording';
+        });
+    });
+  </script>
 </body>
 </html>
 """
@@ -108,13 +228,16 @@ def timeline():
 {% extends "base_template" %}
 {% block content %}
 {% if timestamps|length > 0 %}
-  <div class="container">
-    <div class="slider-container">
-      <input type="range" class="slider custom-range" id="discreteSlider" min="0" max="{{timestamps|length - 1}}" step="1" value="{{timestamps|length - 1}}">
-      <div class="slider-value" id="sliderValue">{{timestamps[0] | timestamp_to_human_readable }}</div>
+  <div class="container-fluid">
+    <div class="image-container mb-4">
+      <img id="timestampImage" src="/static/{{timestamps[0]}}.webp" alt="Image for timestamp" class="img-fluid rounded">
     </div>
-    <div class="image-container">
-      <img id="timestampImage" src="/static/{{timestamps[0]}}.webp" alt="Image for timestamp">
+    <div class="timeline-controls text-center">
+      <button id="playPauseBtn" class="btn btn-primary mx-2"><i class="fas fa-play"></i></button>
+      <div class="slider-container d-inline-block w-75 align-middle">
+        <input type="range" class="slider custom-range" id="discreteSlider" min="0" max="{{timestamps|length - 1}}" step="1" value="{{timestamps|length - 1}}">
+      </div>
+      <div class="slider-value" id="sliderValue">{{timestamps[0] | timestamp_to_human_readable }}</div>
     </div>
   </div>
   <script>
@@ -122,21 +245,46 @@ def timeline():
     const slider = document.getElementById('discreteSlider');
     const sliderValue = document.getElementById('sliderValue');
     const timestampImage = document.getElementById('timestampImage');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    let playInterval;
+
+    function updateContent(index) {
+      const reversedIndex = timestamps.length - 1 - index;
+      const timestamp = timestamps[reversedIndex];
+      sliderValue.textContent = new Date(timestamp * 1000).toLocaleString();
+      timestampImage.src = `/static/${timestamp}.webp`;
+      slider.value = index;
+    }
 
     slider.addEventListener('input', function() {
-      const reversedIndex = timestamps.length - 1 - slider.value;
-      const timestamp = timestamps[reversedIndex];
-      sliderValue.textContent = new Date(timestamp * 1000).toLocaleString();  // Convert to human-readable format
-      timestampImage.src = `/static/${timestamp}.webp`;
+      updateContent(this.value);
     });
 
-    // Initialize the slider with a default value
-    slider.value = timestamps.length - 1;
-    sliderValue.textContent = new Date(timestamps[0] * 1000).toLocaleString();  // Convert to human-readable format
-    timestampImage.src = `/static/${timestamps[0]}.webp`;
+    playPauseBtn.addEventListener('click', function() {
+      if (playInterval) {
+        clearInterval(playInterval);
+        playInterval = null;
+        this.innerHTML = '<i class="fas fa-play"></i>';
+      } else {
+        this.innerHTML = '<i class="fas fa-pause"></i>';
+        playInterval = setInterval(() => {
+          let currentValue = parseInt(slider.value, 10);
+          if (currentValue > 0) {
+            updateContent(currentValue - 1);
+          } else {
+            clearInterval(playInterval);
+            playInterval = null;
+            playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+          }
+        }, 1000);
+      }
+    });
+
+    // Initialize
+    updateContent(timestamps.length - 1);
   </script>
 {% else %}
-  <div class="container">
+  <div class="container-fluid">
       <div class="alert alert-info" role="alert">
           Nothing recorded yet, wait a few seconds.
       </div>
@@ -151,8 +299,12 @@ def timeline():
 @app.route("/search")
 def search():
     q = request.args.get("q")
+    app_filter = request.args.get("app")
+    language_filter = request.args.get("language")
     start_time_str = request.args.get("start_time")
     end_time_str = request.args.get("end_time")
+    apps = get_unique_apps()
+    languages = get_unique_languages()
 
     if start_time_str and end_time_str:
         start_time = int(
@@ -163,17 +315,26 @@ def search():
     else:
         entries = get_all_entries()
 
-    embeddings = [np.frombuffer(entry.embedding, dtype=np.float32) for entry in entries]
-    query_embedding = get_embedding(q)
-    similarities = [cosine_similarity(query_embedding, emb) for emb in embeddings]
-    indices = np.argsort(similarities)[::-1]
-    sorted_entries = [entries[i] for i in indices]
+    if app_filter:
+        entries = [entry for entry in entries if entry.app == app_filter]
+
+    if language_filter:
+        entries = [entry for entry in entries if entry.language == language_filter]
+
+    if q:
+        embeddings = [np.frombuffer(entry.embedding, dtype=np.float32) for entry in entries]
+        query_embedding = get_embedding(q)
+        similarities = [cosine_similarity(query_embedding, emb) for emb in embeddings]
+        indices = np.argsort(similarities)[::-1]
+        sorted_entries = [entries[i] for i in indices]
+    else:
+        sorted_entries = entries
 
     return render_template_string(
         """
 {% extends "base_template" %}
 {% block content %}
-    <div class="container">
+    <div class="container-fluid">
         <div class="row">
             {% for entry in entries %}
                 <div class="col-md-3 mb-4">
@@ -198,12 +359,88 @@ def search():
 {% endblock %}
 """,
         entries=sorted_entries,
+        apps=apps,
+        languages=languages,
     )
 
 
 @app.route("/static/<filename>")
 def serve_image(filename):
     return send_from_directory(screenshots_path, filename)
+
+
+@app.route("/pause", methods=["POST"])
+def pause_recording():
+    if recording_paused.is_set():
+        recording_paused.clear()
+        return {"paused": False}
+    else:
+        recording_paused.set()
+        return {"paused": True}
+
+
+@app.route("/digest")
+def digest():
+    daily_digest = get_activity_digest("day")
+    weekly_digest = get_activity_digest("week")
+    return render_template_string(
+        """
+{% extends "base_template" %}
+{% block content %}
+    <div class="container-fluid">
+        <h1>Activity Digest</h1>
+        <div class="row">
+            <div class="col-md-6">
+                <h2>Last 24 Hours</h2>
+                <div class="card">
+                    <div class="card-header">Most Used Apps</div>
+                    <ul class="list-group list-group-flush">
+                        {% for app, count in daily_digest['apps'] %}
+                            <li class="list-group-item">{{ app }} ({{ count }})</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card mt-4">
+                    <div class="card-header">Most Common Words</div>
+                    <ul class="list-group list-group-flush">
+                        {% for word, count in daily_digest['words'] %}
+                            <li class="list-group-item">{{ word }} ({{ count }})</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h2>Last 7 Days</h2>
+                <div class="card">
+                    <div class="card-header">Most Used Apps</div>
+                    <ul class="list-group list-group-flush">
+                        {% for app, count in weekly_digest['apps'] %}
+                            <li class="list-group-item">{{ app }} ({{ count }})</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card mt-4">
+                    <div class="card-header">Most Common Words</div>
+                    <ul class="list-group list-group-flush">
+                        {% for word, count in weekly_digest['words'] %}
+                            <li class="list-group-item">{{ word }} ({{ count }})</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+""",
+        daily_digest=daily_digest,
+        weekly_digest=weekly_digest,
+    )
+
+
+@app.route("/api/entries")
+def api_entries():
+    entries = get_all_entries()
+    return jsonify([entry._asdict() for entry in entries])
 
 
 if __name__ == "__main__":
