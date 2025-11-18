@@ -18,4 +18,4 @@ def extract_text_from_image(image):
                     text += word.value + " "
                 text += "\n"
             text += "\n"
-    return text, result.pages[0].language.value
+    return text, result.pages[0].language['value']

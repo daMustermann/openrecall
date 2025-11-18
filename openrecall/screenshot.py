@@ -156,7 +156,7 @@ def record_screenshots_thread() -> None:
                 )
                 image = Image.fromarray(current_screenshot)
                 timestamp = int(time.time())
-                filename = f"{timestamp}_{i}.webp"  # Add monitor index to filename for uniqueness
+                filename = f"{timestamp}.webp"  # Add monitor index to filename for uniqueness
                 filepath = os.path.join(screenshots_path, filename)
                 image.save(
                     filepath,
