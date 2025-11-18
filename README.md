@@ -40,23 +40,76 @@ This fork of OpenRecall introduces a host of new features and improvements, incl
 
 ### Prerequisites
 
-*   Python 3.9-3.12
-*   MacOSX/Windows/Linux
-*   Git
+* Python 3.9–3.12
+* macOS, Windows, or Linux with Git installed
+* `pip` (bundled with modern Python installers)
 
-### Installation
+### 1. Clone the repository
 
 ```bash
-python3 -m pip install --upgrade --no-cache-dir git+https://github.com/daMustermann/openrecall.git
+git clone https://github.com/daMustermann/openrecall.git
+cd openrecall
 ```
 
-### Running the Application
+### 2. Create a virtual environment
+
+Using a virtual environment keeps dependencies isolated from the rest of your system.
 
 ```bash
-python3 -m openrecall.app
+# macOS / Linux
+python3 -m venv .venv
+
+# Windows
+py -m venv .venv
+```
+
+### 3. Activate the environment
+
+```bash
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows (PowerShell)
+.\.venv\Scripts\Activate.ps1
+
+# Windows (Command Prompt)
+.\.venv\Scripts\activate.bat
+```
+
+You should now see `(.venv)` prefixed in your terminal prompt.
+
+### 4. Install OpenRecall in editable mode
+
+```bash
+pip install -e .
+```
+
+This command installs OpenRecall and its dependencies into the active virtual environment, so any local code changes take effect immediately.
+
+### 5. Run the application
+
+```bash
+python -m openrecall.app
 ```
 
 Open your browser to `http://localhost:8082` to access OpenRecall.
+
+### Windows quick-launch batch file
+
+Create a file named `start-openrecall.bat` inside the project root to activate the virtual environment and start the app with a double-click:
+
+```bat
+@echo off
+REM Update the path below if you saved the project somewhere else
+cd /d F:\Coding\openrecall
+call .venv\Scripts\activate.bat
+python -m openrecall.app
+pause
+```
+
+* `cd /d` ensures the script switches drives if needed.
+* `pause` keeps the window open so you can read log output; remove it if you prefer the window to close automatically.
+* If you primarily use PowerShell, replace `activate.bat` with `Activate.ps1` and save the file as `.ps1` instead.
 
 ## New Features in Detail
 
