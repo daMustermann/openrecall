@@ -1,6 +1,5 @@
 # OpenRecall - Your Open-Source Digital Memory
 
-![OpenRecall Logo](images/lisa_rewind.webp)
 
 **Take Control of Your Digital Memory with OpenRecall, a fully open-source, privacy-first alternative to proprietary solutions like Microsoft's Windows Recall or Limitless' Rewind.ai.**
 
