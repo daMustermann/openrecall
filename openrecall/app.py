@@ -1,5 +1,6 @@
 from threading import Thread
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
@@ -23,6 +24,9 @@ app = Flask(__name__)
 
 app.jinja_env.filters["human_readable_time"] = human_readable_time
 app.jinja_env.filters["timestamp_to_human_readable"] = timestamp_to_human_readable
+
+# Frontend directory for serving built React app
+FRONTEND_DIR = Path(__file__).parent.parent / 'frontend'
 
 base_template = """
 <!DOCTYPE html>
@@ -208,96 +212,46 @@ base_template = """
 </html>
 """
 
-
 class StringLoader(BaseLoader):
     def get_source(self, environment, template):
         if template == "base_template":
             return base_template, None, lambda: True
         return None, None, None
 
-
 app.jinja_env.loader = StringLoader()
 
+# Serve built assets (JS/CSS) directly
+@app.route("/assets/<path:path>")
+def serve_assets(path):
+    return send_from_directory(str(FRONTEND_DIR / 'assets'), path)
 
 @app.route("/")
-def timeline():
-    # connect to db
-    timestamps = get_timestamps()
-    return render_template_string(
-        """
-{% extends "base_template" %}
-{% block content %}
-{% if timestamps|length > 0 %}
-  <div class="container-fluid">
-    <div class="image-container mb-4">
-      <img id="timestampImage" src="/static/{{timestamps[0]}}.webp" alt="Image for timestamp" class="img-fluid rounded">
-    </div>
-    <div class="timeline-controls text-center">
-      <button id="playPauseBtn" class="btn btn-primary mx-2"><i class="fas fa-play"></i></button>
-      <div class="slider-container d-inline-block w-75 align-middle">
-        <input type="range" class="slider custom-range" id="discreteSlider" min="0" max="{{timestamps|length - 1}}" step="1" value="{{timestamps|length - 1}}">
-      </div>
-      <div class="slider-value" id="sliderValue">{{timestamps[0] | timestamp_to_human_readable }}</div>
-    </div>
-  </div>
-  <script>
-    const timestamps = {{ timestamps|tojson }};
-    const slider = document.getElementById('discreteSlider');
-    const sliderValue = document.getElementById('sliderValue');
-    const timestampImage = document.getElementById('timestampImage');
-    const playPauseBtn = document.getElementById('playPauseBtn');
-    let playInterval;
+def serve_react_app():
+    return send_from_directory(str(FRONTEND_DIR), 'index.html')
 
-    function updateContent(index) {
-      const reversedIndex = timestamps.length - 1 - index;
-      const timestamp = timestamps[reversedIndex];
-      sliderValue.textContent = new Date(timestamp * 1000).toLocaleString();
-      timestampImage.src = `/static/${timestamp}.webp`;
-      slider.value = index;
-    }
+@app.route("/<path:path>")
+def serve_react_static(path):
+    # Try to serve from frontend directory first (React app)
+    try:
+        return send_from_directory(str(FRONTEND_DIR), path)
+    except:
+        # Fallback to old routes for backward compatibility
+        if path == "search":
+            return search()
+        elif path == "digest":
+            return digest()
+        else:
+            return send_from_directory(str(FRONTEND_DIR), 'index.html')
 
-    slider.addEventListener('input', function() {
-      updateContent(this.value);
-    });
-
-    playPauseBtn.addEventListener('click', function() {
-      if (playInterval) {
-        clearInterval(playInterval);
-        playInterval = null;
-        this.innerHTML = '<i class="fas fa-play"></i>';
-      } else {
-        this.innerHTML = '<i class="fas fa-pause"></i>';
-        playInterval = setInterval(() => {
-          let currentValue = parseInt(slider.value, 10);
-          if (currentValue > 0) {
-            updateContent(currentValue - 1);
-          } else {
-            clearInterval(playInterval);
-            playInterval = null;
-            playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-          }
-        }, 1000);
-      }
-    });
-
-    // Initialize
-    updateContent(timestamps.length - 1);
-  </script>
-{% else %}
-  <div class="container-fluid">
-      <div class="alert alert-info" role="alert">
-          Nothing recorded yet, wait a few seconds.
-      </div>
-  </div>
-{% endif %}
-{% endblock %}
-""",
-        timestamps=timestamps,
-    )
-
-
+# Legacy routes for backward compatibility (only if frontend doesn't exist)
 @app.route("/search")
 def search():
+    # Only serve legacy if frontend doesn't exist
+    if not FRONTEND_DIR.exists():
+        return _legacy_search()
+    return send_from_directory(str(FRONTEND_DIR), "index.html")
+
+def _legacy_search():
     q = request.args.get("q")
     app_filter = request.args.get("app")
     language_filter = request.args.get("language")
@@ -363,11 +317,9 @@ def search():
         languages=languages,
     )
 
-
 @app.route("/static/<filename>")
 def serve_image(filename):
     return send_from_directory(screenshots_path, filename)
-
 
 @app.route("/pause", methods=["POST"])
 def pause_recording():
@@ -377,7 +329,6 @@ def pause_recording():
     else:
         recording_paused.set()
         return {"paused": True}
-
 
 @app.route("/digest")
 def digest():
@@ -436,12 +387,16 @@ def digest():
         weekly_digest=weekly_digest,
     )
 
-
 @app.route("/api/entries")
 def api_entries():
     entries = get_all_entries()
-    return jsonify([entry._asdict() for entry in entries])
-
+    # Convert entries to dict and make embedding JSON serializable
+    entries_dict = []
+    for entry in entries:
+        entry_dict = entry._asdict()
+        entry_dict['embedding'] = entry.embedding.tolist() if hasattr(entry.embedding, 'tolist') else entry.embedding
+        entries_dict.append(entry_dict)
+    return jsonify(entries_dict)
 
 if __name__ == "__main__":
     create_db()

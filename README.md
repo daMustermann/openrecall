@@ -12,7 +12,14 @@ OpenRecall captures your digital history through regular screenshots. The text a
 
 This fork of OpenRecall introduces a host of new features and improvements, including:
 
-*   **Modern UI/UX:** A complete redesign of the user interface, featuring a sleek, app-like design, dark mode, and improved timeline controls.
+*   **🚀 Complete Frontend Rewrite:** A stunning new React 18 + TypeScript frontend with cyberpunk aesthetics, intelligent event clustering, and magical search capabilities.
+*   **🎨 Cyberpunk UI/UX:** Dark mode only with electric cyan, neon green, magenta, and orange accents. Glass morphism, particle effects, and buttery 120fps animations.
+*   **🧠 Intelligent Event Clustering:** Screenshots are automatically grouped into meaningful "events" (coding sessions, gaming, meetings, etc.) using AI embeddings and heuristics.
+*   **🔍 Magical Omnibar Search:** Semantic + keyword + fuzzy search with live previews, understanding natural language queries like "What did I code yesterday?".
+*   **📊 Smart Dashboard:** Activity heatmaps, productivity scores, app usage stats, and AI-generated insights.
+*   **🎬 Event Playback:** Watch your digital activity as a slideshow with smooth transitions.
+*   **🤖 AI Integration:** Local Ollama integration for summaries, embeddings, and smart tagging.
+*   **📱 PWA Ready:** Offline-capable, installable as a desktop app.
 *   **Enhanced Search and Filtering:** Filter your search results by application, language, and date/time.
 *   **"Incognito" or "Pause" Mode:** Temporarily pause screen recording for added privacy.
 *   **Automatic Language Detection:** OpenRecall now automatically detects the language of the text in your screenshots.
@@ -36,63 +43,103 @@ This fork of OpenRecall introduces a host of new features and improvements, incl
 | **Privacy** | On-device, self-hosted | Microsoft's privacy policy applies | Connected to ChatGPT |
 | **Cost** | Free | Part of Windows 11 (requires specialized hardware) | Monthly subscription |
 
-## Get Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-* Python 3.9–3.12
-* macOS, Windows, or Linux with Git installed
-* `pip` (bundled with modern Python installers)
+* **Python 3.9–3.12** (with `pip`)
+* **Node.js 18+** and **npm** (for frontend development)
+* **Git**
+* **Windows, macOS, or Linux**
 
-### 1. Clone the repository
+### Installation
 
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/daMustermann/openrecall.git
+   cd openrecall
+   ```
+
+2. **Set up Python backend**
+   ```bash
+   # Create virtual environment
+   python -m venv .venv
+
+   # Activate it
+   # Windows (PowerShell):
+   .\venv\Scripts\Activate.ps1
+   # Windows (Command Prompt):
+   .\venv\Scripts\activate.bat
+   # macOS/Linux:
+   source .venv/bin/activate
+
+   # Install Python dependencies
+   pip install -e .
+   ```
+
+3. **Set up modern frontend (optional - for development)**
+   ```bash
+   # Install Node.js dependencies
+   npm install
+   ```
+
+### Running the Application
+
+#### Option 1: Development Mode (Recommended for development)
 ```bash
-git clone https://github.com/daMustermann/openrecall.git
-cd openrecall
+# Terminal 1: Start Python backend
+python -m openrecall.app
+
+# Terminal 2: Start React frontend
+npm run dev
 ```
 
-### 2. Create a virtual environment
+- **Frontend:** http://localhost:5173 (modern React app)
+- **Backend API:** http://localhost:8082/api (proxied through frontend)
 
-Using a virtual environment keeps dependencies isolated from the rest of your system.
-
+#### Option 2: Production Mode (Recommended for regular use)
 ```bash
-# macOS / Linux
-python3 -m venv .venv
+# Build the frontend
+npm run build
 
-# Windows
-py -m venv .venv
-```
-
-### 3. Activate the environment
-
-```bash
-# macOS / Linux
-source .venv/bin/activate
-
-# Windows (PowerShell)
-.\.venv\Scripts\Activate.ps1
-
-# Windows (Command Prompt)
-.\.venv\Scripts\activate.bat
-```
-
-You should now see `(.venv)` prefixed in your terminal prompt.
-
-### 4. Install OpenRecall in editable mode
-
-```bash
-pip install -e .
-```
-
-This command installs OpenRecall and its dependencies into the active virtual environment, so any local code changes take effect immediately.
-
-### 5. Run the application
-
-```bash
+# Start the all-in-one server
 python -m openrecall.app
 ```
 
-Open your browser to `http://localhost:8082` to access OpenRecall.
+- **Everything served at:** http://localhost:8082
+- Backend serves the built React frontend + API
+
+#### Option 3: Windows Quick Launch
+Create `start-openrecall.bat` in the project root:
+```bat
+@echo off
+cd /d F:\Coding\openrecall
+call .venv\Scripts\activate.bat
+python -m openrecall.app
+pause
+```
+Double-click to launch (update the path as needed).
+
+## Frontend Architecture
+
+The new frontend is built with:
+
+* **React 18 + TypeScript** - Modern, type-safe React
+* **Vite** - Lightning-fast development server and build tool
+* **Tailwind CSS + shadcn/ui** - Beautiful, accessible UI components
+* **Framer Motion** - Smooth animations and transitions
+* **Zustand + TanStack Query** - State management and data fetching
+* **Fuse.js** - Fuzzy search capabilities
+* **Ollama Integration** - Local AI for embeddings and summaries
+
+### Key Features
+
+* **Cyberpunk Aesthetics** - Dark mode with neon accents and glass morphism
+* **Intelligent Event Clustering** - Groups screenshots into meaningful activities
+* **Magical Search** - Semantic search with live previews (⌘K / Ctrl+K)
+* **Event Playback** - Watch your activity as a slideshow
+* **Smart Dashboard** - Activity insights and productivity metrics
+* **PWA Ready** - Installable as a desktop app
 
 ### Windows quick-launch batch file
 
