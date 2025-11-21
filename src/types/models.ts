@@ -8,9 +8,11 @@ export interface Entry {
   timestamp: number; // Unix seconds
   embedding?: number[]; // float32[], optional if backend doesn't provide
   language: string;
+  event_id?: string;
+  is_processed?: boolean;
 }
 
-export interface EntriesResponse extends Array<Entry> {}
+export interface EntriesResponse extends Array<Entry> { }
 
 export interface PauseResponse {
   paused: boolean;

@@ -11,6 +11,7 @@ from openrecall.config import screenshots_path, args
 from openrecall.database import insert_entry
 from openrecall.nlp import get_embedding
 from openrecall.ocr import extract_text_from_image
+from openrecall.clustering import run_clustering
 from openrecall.utils import (
     get_active_app_name,
     get_active_window_title,
@@ -127,6 +128,7 @@ def record_screenshots_thread() -> None:
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     last_screenshots: List[np.ndarray] = take_screenshots()
+    last_cluster_time = time.time()
 
     while True:
         if recording_paused.is_set():
@@ -181,6 +183,14 @@ def record_screenshots_thread() -> None:
                     )
 
         time.sleep(3)  # Wait before taking the next screenshot
+        
+        # Periodic clustering (every 5 minutes)
+        if time.time() - last_cluster_time > 300:
+            try:
+                run_clustering()
+                last_cluster_time = time.time()
+            except Exception as e:
+                print(f"Error running periodic clustering: {e}")
 
 def resize_image(image: np.ndarray, max_dim: int = 800) -> np.ndarray:
     """

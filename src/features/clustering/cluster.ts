@@ -1,6 +1,6 @@
 import { Entry, Event, EventType } from '@/types/models'
 import { cosineSimilarity, generateId } from '@/lib/utils'
-import { ollamaClient } from '@/api/client'
+import { aiClient } from '@/api/client'
 
 // Feature extraction for clustering
 export function extractFeatures(entries: Entry[]): Array<{
@@ -14,7 +14,13 @@ export function extractFeatures(entries: Entry[]): Array<{
     const appChanged = prevEntry ? (entry.app !== prevEntry.app ? 1 : 0) : 0
 
     // Normalize time delta (0-1 scale, assuming max gap of 1 hour)
-    const normalizedTimeDelta = Math.min(timeDelta / 3600, 1)
+    // FIX: Enforce hard split for gaps larger than 2 hours (7200s)
+    let normalizedTimeDelta = 0
+    if (timeDelta > 7200) {
+      normalizedTimeDelta = 10 // Large value to force split
+    } else {
+      normalizedTimeDelta = Math.min(timeDelta / 3600, 1)
+    }
 
     // Title similarity (simple string similarity)
     const titleSim = prevEntry ?
@@ -143,8 +149,10 @@ async function createEventFromCluster(entries: Entry[]): Promise<Event> {
 
   // Generate title and description with AI
   const combinedText = entries.map(e => `${e.app}: ${e.title} - ${e.text}`).join('\n')
-  const title = await generateEventTitle(combinedText, type)
-  const description = await ollamaClient.generateSummary(combinedText)
+
+  // Use new AI client
+  const title = await aiClient.generateTitle(combinedText, type)
+  const description = await aiClient.generateSummary(combinedText)
 
   // Tags (simple keyword extraction)
   const tags = extractTags(entries)
@@ -166,7 +174,6 @@ async function createEventFromCluster(entries: Entry[]): Promise<Event> {
       topApps: getTopApps(entries),
       wordCount,
       topWords: getTopWords(entries),
-      // Type-specific stats will be added by classifyEventType
     },
     tags,
   }
@@ -202,19 +209,8 @@ function classifyEventType(entries: Entry[]): EventType {
   return 'browsing'
 }
 
-// Generate event title
-async function generateEventTitle(_text: string, type: EventType): Promise<string> {
-  const typeLabels = {
-    coding: 'Coding Session',
-    gaming: 'Gaming Session',
-    video: 'Video Watching',
-    meeting: 'Meeting',
-    browsing: 'Web Browsing',
-    other: 'Activity'
-  }
-
-  return typeLabels[type]
-}
+// Generate event title - REMOVED (now in aiClient)
+// async function generateEventTitle...
 
 // Extract tags from entries
 function extractTags(entries: Entry[]): string[] {
@@ -249,7 +245,7 @@ function getTopApps(entries: Entry[]): Array<[string, number]> {
     appCounts[e.app] = (appCounts[e.app] || 0) + 1
   })
   return Object.entries(appCounts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
 }
 
@@ -266,6 +262,6 @@ function getTopWords(entries: Entry[]): Array<[string, number]> {
   })
 
   return Object.entries(wordCounts)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
 }

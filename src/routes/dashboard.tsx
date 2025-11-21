@@ -29,7 +29,7 @@ export default function Dashboard() {
   }, {} as Record<string, number>)
 
   const topApps = Object.entries(appUsage)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
 
   return (
@@ -40,12 +40,20 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-white mb-2">Daily Recall</h1>
           <p className="text-white/70">Insights into your digital activity</p>
         </div>
-        <Link
-          to="/"
-          className="glass px-4 py-2 rounded-lg text-cyan hover:text-white transition-colors"
-        >
-          Back to Timeline
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/"
+            className="glass px-4 py-2 rounded-lg text-cyan hover:text-white transition-colors"
+          >
+            Back to Timeline
+          </Link>
+          <Link
+            to="/settings"
+            className="glass px-4 py-2 rounded-lg text-cyan hover:text-white transition-colors"
+          >
+            Settings
+          </Link>
+        </div>
       </div>
 
       {/* Stats Grid */}

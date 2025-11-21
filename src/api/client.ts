@@ -1,4 +1,4 @@
-import { EntriesResponse, PauseResponse } from '@/types/models'
+import { EntriesResponse, PauseResponse, Event } from '@/types/models'
 
 // Base API client
 const API_BASE = '/api'
@@ -25,55 +25,122 @@ export const apiClient = {
   // Get screenshot image
   getScreenshotUrl(timestamp: number): string {
     return `/static/${timestamp}.webp`
+  },
+
+  async getEvents(limit = 50, offset = 0): Promise<Event[]> {
+    const response = await fetch(`${API_BASE}/events?limit=${limit}&offset=${offset}`)
+    if (!response.ok) throw new Error('Failed to fetch events')
+    return response.json()
+  },
+
+  async runJob(task: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/jobs/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task })
+    })
+    if (!response.ok) throw new Error('Failed to run job')
+    return response.json()
+  },
+
+  async chat(query: string): Promise<{ response: string }> {
+    const response = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    })
+    if (!response.ok) throw new Error('Chat failed')
+    return response.json()
   }
 }
 
-// Ollama client for local AI
-export const ollamaClient = {
-  baseUrl: 'http://localhost:11434',
-
-  async generateEmbedding(text: string, model = 'llama3.1'): Promise<number[]> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt: text })
-      })
-
-      if (!response.ok) {
-        console.warn('Ollama not available, using fallback')
-        return []
-      }
-
-      const data = await response.json()
-      return data.embedding || []
-    } catch (error) {
-      console.warn('Ollama embedding failed:', error)
-      return []
-    }
+// AI client using backend proxy
+export const aiClient = {
+  async generateEmbedding(_text: string): Promise<number[]> {
+    return []
   },
 
-  async generateSummary(text: string, model = 'llama3.1'): Promise<string> {
+  async generateSummary(text: string): Promise<string> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/generate`, {
+      const response = await fetch(`${API_BASE}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
-          prompt: `Summarize this activity in 2-3 sentences: ${text}`,
-          stream: false
+          task: 'summary',
+          prompt: text
         })
       })
 
       if (!response.ok) {
-        return 'Summary not available (Ollama offline)'
+        return 'Summary not available'
       }
 
       const data = await response.json()
       return data.response || 'Summary not available'
     } catch (error) {
-      console.warn('Ollama summary failed:', error)
-      return 'Summary not available (Ollama offline)'
+      console.warn('AI summary failed:', error)
+      return 'Summary not available'
+    }
+  },
+
+  async generateTitle(text: string, eventType: string): Promise<string> {
+    try {
+      const response = await fetch(`${API_BASE}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task: 'title',
+          prompt: text,
+          eventType
+        })
+      })
+
+      if (!response.ok) {
+        return `${eventType} Session`
+      }
+
+      const data = await response.json()
+      return data.response || `${eventType} Session`
+    } catch (error) {
+      console.warn('AI title failed:', error)
+      return `${eventType} Session`
+    }
+  },
+
+  // Config methods
+  async getConfig(): Promise<any> {
+    const response = await fetch(`${API_BASE}/config`)
+    if (!response.ok) throw new Error('Failed to fetch config')
+    return response.json()
+  },
+
+  async saveConfig(config: any): Promise<any> {
+    const response = await fetch(`${API_BASE}/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    })
+    if (!response.ok) throw new Error('Failed to save config')
+    return response.json()
+  },
+
+  async reindex(): Promise<any> {
+    const response = await fetch(`${API_BASE}/reindex`, {
+      method: 'POST'
+    })
+    if (!response.ok) throw new Error('Reindexing failed')
+    return await response.json()
+  },
+
+  async fetchModels(): Promise<string[]> {
+    try {
+      const response = await fetch(`${API_BASE}/models`)
+      if (!response.ok) return []
+      const data = await response.json()
+      return data.models || []
+    } catch (error) {
+      console.warn('Failed to fetch models:', error)
+      return []
     }
   }
 }

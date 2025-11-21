@@ -1,80 +1,20 @@
 import numpy as np
-import os
 import logging
-
-from sentence_transformers import SentenceTransformer
-
-from openrecall.config import model_cache_path
+from openrecall.ai_client import get_ai_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-MODEL_NAME: str = "all-MiniLM-L6-v2"
-EMBEDDING_DIM: int = 384  # Dimension for all-MiniLM-L6-v2
-
-
-def get_model(model_name):
-    cache_path = os.path.join(model_cache_path, model_name)
-    if os.path.isdir(cache_path):
-        return SentenceTransformer(cache_path)
-    else:
-        model = SentenceTransformer(model_name)
-        model.save(cache_path)
-        return model
-
-
-# Load the model globally to avoid reloading it on every call
-try:
-    model = get_model(MODEL_NAME)
-    logger.info(f"SentenceTransformer model '{MODEL_NAME}' loaded successfully.")
-except Exception as e:
-    logger.error(f"Failed to load SentenceTransformer model '{MODEL_NAME}': {e}")
-    model = None
-
+EMBEDDING_DIM: int = 384  # Dimension for all-MiniLM-L6-v2 (default)
 
 def get_embedding(text: str) -> np.ndarray:
     """
-    Generates a sentence embedding for the given text.
-
-    Splits the text into lines, encodes each line using the pre-loaded
-    SentenceTransformer model, and returns the mean of the embeddings.
-    Handles empty input text by returning a zero vector.
-
-    Args:
-        text: The input string to embed.
-
-    Returns:
-        A numpy array representing the mean embedding of the text lines,
-        or a zero vector if the input is empty, whitespace only, or the
-        model failed to load. The array type is float32.
+    Generates a sentence embedding for the given text using the configured AI client.
     """
-    if model is None:
-        logger.error("SentenceTransformer model is not loaded. Returning zero vector.")
-        return np.zeros(EMBEDDING_DIM, dtype=np.float32)
-
-    if not text or text.isspace():
-        logger.warning("Input text is empty or whitespace. Returning zero vector.")
-        return np.zeros(EMBEDDING_DIM, dtype=np.float32)
-
-    # Split text into non-empty lines
-    sentences = [line for line in text.split("\n") if line.strip()]
-
-    if not sentences:
-        logger.warning(
-            "No non-empty lines found after splitting. Returning zero vector."
-        )
-        return np.zeros(EMBEDDING_DIM, dtype=np.float32)
-
-    try:
-        sentence_embeddings = model.encode(sentences)
-        # Calculate the mean embedding
-        mean_embedding = np.mean(sentence_embeddings, axis=0, dtype=np.float32)
-        return mean_embedding
-    except Exception as e:
-        logger.error(f"Error generating embedding: {e}")
-        return np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    client = get_ai_client()
+    return client.get_embedding(text)
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

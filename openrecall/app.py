@@ -6,7 +6,7 @@ import numpy as np
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
 from jinja2 import BaseLoader
 
-from openrecall.config import appdata_folder, screenshots_path
+from openrecall.config import appdata_folder, screenshots_path, get_config, save_config
 from openrecall.database import (
     create_db,
     get_all_entries,
@@ -17,8 +17,11 @@ from openrecall.database import (
     get_activity_digest,
 )
 from openrecall.nlp import cosine_similarity, get_embedding
+from openrecall.ai_client import get_ai_client
 from openrecall.screenshot import record_screenshots_thread, recording_paused
 from openrecall.utils import human_readable_time, timestamp_to_human_readable
+from openrecall.scheduler import scheduler
+from openrecall.database import get_events, get_pending_jobs
 
 app = Flask(__name__)
 
@@ -398,6 +401,142 @@ def api_entries():
         entries_dict.append(entry_dict)
     return jsonify(entries_dict)
 
+@app.route("/api/config", methods=["GET", "POST"])
+def api_config():
+    if request.method == "POST":
+        new_config = request.json
+        updated_config = save_config(new_config)
+        # Re-initialize AI client with new config
+        global ai_client
+        from openrecall.ai_client import AIClient
+        import openrecall.ai_client as ai_module
+        ai_module.ai_client = AIClient() # Force reload
+        return jsonify(updated_config)
+    return jsonify(get_config())
+
+@app.route("/api/generate", methods=["POST"])
+def api_generate():
+    data = request.json
+    prompt = data.get("prompt", "")
+    task = data.get("task", "summary") # summary or title
+    
+    client = get_ai_client()
+    
+    if task == "title":
+        event_type = data.get("eventType", "activity")
+        result = client.generate_title(prompt, event_type)
+    else:
+        result = client.generate_summary(prompt)
+        
+    return jsonify({"response": result})
+
+@app.route("/api/models", methods=["GET"])
+def api_models():
+    client = get_ai_client()
+    try:
+        # Only support listing models for OpenAI-compatible providers for now
+        if client.provider in ["lm_studio", "ollama", "openai"]:
+            models = client.client.models.list()
+            model_ids = [m.id for m in models.data]
+            return jsonify({"models": model_ids})
+        return jsonify({"models": []})
+    except Exception as e:
+        print(f"Failed to fetch models: {e}")
+        return jsonify({"models": []})
+
+@app.route("/api/reindex", methods=["POST"])
+def api_reindex():
+    """
+    Regenerates embeddings for all entries using the current AI configuration.
+    This is a long-running operation.
+    """
+    try:
+        entries = get_all_entries()
+        client = get_ai_client()
+        count = 0
+        
+        # In a real app, this should be a background task. 
+        # For now, we'll do it synchronously but it might timeout for large DBs.
+        # A better approach for the user is to see progress.
+        # But let's keep it simple: iterate and update.
+        
+        print(f"Starting reindexing for {len(entries)} entries...")
+        
+        for entry in entries:
+            # We only need to re-embed if we have text
+            if entry.text:
+                try:
+                    # Generate new embedding
+                    embedding = client.generate_embedding(entry.text)
+                    # Update DB
+                    from openrecall.database import update_entry_embedding
+                    update_entry_embedding(entry.id, embedding)
+                    count += 1
+                    if count % 10 == 0:
+                        print(f"Reindexed {count}/{len(entries)} entries")
+                except Exception as e:
+                    print(f"Failed to re-embed entry {entry.id}: {e}")
+                    
+        return jsonify({"success": True, "count": count})
+    except Exception as e:
+        print(f"Reindexing failed: {e}")
+        return jsonify({"success": True, "count": count})
+    except Exception as e:
+        print(f"Reindexing failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/events")
+def api_events():
+    limit = int(request.args.get("limit", 50))
+    offset = int(request.args.get("offset", 0))
+    events = get_events(limit, offset)
+    # Convert namedtuples to dicts
+    return jsonify([e._asdict() for e in events])
+
+@app.route("/api/jobs/run", methods=["POST"])
+def api_run_jobs():
+    """Manually trigger pending jobs or specific tasks."""
+    task = request.json.get("task")
+    if task == "cluster":
+        # Run clustering immediately
+        from openrecall.clustering import run_clustering
+        try:
+            run_clustering()
+            return jsonify({"success": True, "message": "Clustering completed"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+    else:
+        # Trigger scheduler to run pending jobs immediately (ignoring idle)
+        # We can just wake up the scheduler or process here.
+        # For simplicity, let's process pending jobs synchronously here for feedback.
+        try:
+            jobs = get_pending_jobs()
+            count = 0
+            for job in jobs:
+                scheduler.process_job(job)
+                count += 1
+            return jsonify({"success": True, "count": count})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    """Chat with your memory."""
+    data = request.json
+    query = data.get("query")
+    if not query:
+        return jsonify({"error": "Query required"}), 400
+        
+    # TODO: Implement RAG
+    # For now, return a placeholder response
+    return jsonify({"response": "I'm still learning to chat! But I can see your events."})
+
+@app.route("/api/stats")
+def api_stats():
+    """Get enhanced stats."""
+    # TODO: Implement stats aggregation from events
+    return jsonify({"daily": {}, "weekly": {}})
+
 if __name__ == "__main__":
     create_db()
 
@@ -406,5 +545,8 @@ if __name__ == "__main__":
     # Start the thread to record screenshots
     t = Thread(target=record_screenshots_thread)
     t.start()
+
+    # Start the scheduler
+    scheduler.start()
 
     app.run(port=8082)

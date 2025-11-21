@@ -1,7 +1,7 @@
 import Fuse from 'fuse.js'
 import { Event, SearchResult } from '@/types/models'
 import { cosineSimilarity } from '@/lib/utils'
-import { ollamaClient } from '@/api/client'
+import { aiClient } from '@/api/client'
 
 // In-memory search index
 let fuseIndex: Fuse<any> | null = null
@@ -81,7 +81,7 @@ export async function performSearch(query: string, events: Event[]): Promise<Sea
 
   // 2. Semantic search with embeddings (if available)
   try {
-    const queryEmbedding = await ollamaClient.generateEmbedding(query)
+    const queryEmbedding = await aiClient.generateEmbedding(query)
     if (queryEmbedding.length > 0) {
       for (const event of events) {
         for (const entry of event.entries) {

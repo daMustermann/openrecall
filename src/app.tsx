@@ -3,6 +3,8 @@ import { Toaster } from '@/components/ui/toaster'
 import Timeline from '@/routes/timeline'
 import Dashboard from '@/routes/dashboard'
 import EventDetail from '@/routes/event-detail'
+import Settings from '@/routes/settings'
+import ChatRoute from '@/routes/chat'
 import Omnibar from '@/features/search/Omnibar'
 import { useEffect } from 'react'
 
@@ -20,6 +22,8 @@ function App() {
           <Route path="/" element={<Timeline />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/event/:eventId" element={<EventDetail />} />
+          <Route path="/chat" element={<ChatRoute />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
       <Toaster />

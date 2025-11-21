@@ -1,69 +1,112 @@
 import sqlite3
 import time
+import json
+import uuid
 from collections import namedtuple
 import numpy as np
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Dict
 
 from openrecall.config import db_path
 
 # Define the structure of a database entry using namedtuple
 Entry = namedtuple(
-    "Entry", ["id", "app", "title", "text", "timestamp", "embedding", "language"]
+    "Entry", ["id", "app", "title", "text", "timestamp", "embedding", "language", "event_id", "is_processed"]
+)
+
+Event = namedtuple(
+    "Event", ["id", "start_time", "end_time", "title", "description", "type", "stats", "hero_image", "thumbnails", "tags"]
+)
+
+Job = namedtuple(
+    "Job", ["id", "type", "payload", "status", "created_at", "updated_at"]
 )
 
 
 def create_db() -> None:
     """
-    Creates the SQLite database and the 'entries' table if they don't exist.
-
-    The table schema includes columns for an auto-incrementing ID, application name,
-    window title, extracted text, timestamp, and text embedding.
+    Creates the SQLite database and tables.
+    DROPS EXISTING TABLES for a fresh start.
     """
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
+            
+            # Fresh start: Drop tables
+            cursor.execute("DROP TABLE IF EXISTS entries")
+            cursor.execute("DROP TABLE IF EXISTS events")
+            cursor.execute("DROP TABLE IF EXISTS jobs")
+
+            # Create entries table
             cursor.execute(
-                """CREATE TABLE IF NOT EXISTS entries (
+                """CREATE TABLE entries (
                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                        app TEXT,
                        title TEXT,
                        text TEXT,
                        timestamp INTEGER UNIQUE,
                        embedding BLOB,
-                       language TEXT
+                       language TEXT,
+                       event_id TEXT,
+                       is_processed BOOLEAN DEFAULT 0,
+                       FOREIGN KEY(event_id) REFERENCES events(id)
                    )"""
             )
-            # Add index on timestamp for faster lookups
+            
+            # Create events table
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_timestamp ON entries (timestamp)"
+                """CREATE TABLE events (
+                       id TEXT PRIMARY KEY,
+                       start_time INTEGER,
+                       end_time INTEGER,
+                       title TEXT,
+                       description TEXT,
+                       type TEXT,
+                       stats TEXT,
+                       hero_image TEXT,
+                       thumbnails TEXT,
+                       tags TEXT
+                   )"""
             )
+            
+            # Create jobs table
+            cursor.execute(
+                """CREATE TABLE jobs (
+                       id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       type TEXT,
+                       payload TEXT,
+                       status TEXT,
+                       created_at INTEGER,
+                       updated_at INTEGER
+                   )"""
+            )
+
+            # Indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON entries (timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_event_id ON entries (event_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_event_start ON events (start_time)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_status ON jobs (status)")
+            
             conn.commit()
+            print("Database initialized with fresh schema.")
     except sqlite3.Error as e:
         print(f"Database error during table creation: {e}")
 
 
 def get_all_entries() -> List[Entry]:
-    """
-    Retrieves all entries from the database.
-
-    Returns:
-        List[Entry]: A list of all entries as Entry namedtuples.
-                     Returns an empty list if the table is empty or an error occurs.
-    """
     entries: List[Entry] = []
     try:
         with sqlite3.connect(db_path) as conn:
-            conn.row_factory = sqlite3.Row  # Return rows as dictionary-like objects
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, app, title, text, timestamp, embedding, language FROM entries ORDER BY timestamp DESC"
+                "SELECT * FROM entries ORDER BY timestamp DESC"
             )
             results = cursor.fetchall()
             for row in results:
-                # Deserialize the embedding blob back into a NumPy array
                 embedding = np.frombuffer(
                     row["embedding"], dtype=np.float32
-                )  # Assuming float32, adjust if needed
+                ) if row["embedding"] else None
+                
                 entries.append(
                     Entry(
                         id=row["id"],
@@ -73,6 +116,8 @@ def get_all_entries() -> List[Entry]:
                         timestamp=row["timestamp"],
                         embedding=embedding,
                         language=row["language"],
+                        event_id=row["event_id"],
+                        is_processed=bool(row["is_processed"])
                     )
                 )
     except sqlite3.Error as e:
@@ -81,18 +126,10 @@ def get_all_entries() -> List[Entry]:
 
 
 def get_timestamps() -> List[int]:
-    """
-    Retrieves all timestamps from the database, ordered descending.
-
-    Returns:
-        List[int]: A list of all timestamps.
-                   Returns an empty list if the table is empty or an error occurs.
-    """
     timestamps: List[int] = []
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            # Use the index for potentially faster retrieval
             cursor.execute("SELECT timestamp FROM entries ORDER BY timestamp DESC")
             results = cursor.fetchall()
             timestamps = [result[0] for result in results]
@@ -104,68 +141,82 @@ def get_timestamps() -> List[int]:
 def insert_entry(
     text: str,
     timestamp: int,
-    embedding: np.ndarray,
+    embedding: Optional[np.ndarray],
     app: str,
     title: str,
     language: str,
+    event_id: Optional[str] = None,
+    is_processed: bool = False
 ) -> Optional[int]:
-    """
-    Inserts a new entry into the database.
-
-    Args:
-        text (str): The extracted text content.
-        timestamp (int): The Unix timestamp of the screenshot.
-        embedding (np.ndarray): The embedding vector for the text.
-        app (str): The name of the active application.
-        title (str): The title of the active window.
-
-    Returns:
-        Optional[int]: The ID of the newly inserted row, or None if insertion fails.
-                       Prints an error message to stderr on failure.
-    """
-    embedding_bytes: bytes = embedding.astype(
-        np.float32
-    ).tobytes()  # Ensure consistent dtype
+    embedding_bytes = embedding.astype(np.float32).tobytes() if embedding is not None else None
     last_row_id: Optional[int] = None
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                """INSERT INTO entries (text, timestamp, embedding, app, title, language)
-                   VALUES (?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(timestamp) DO NOTHING""",  # Avoid duplicates based on timestamp
-                (text, timestamp, embedding_bytes, app, title, language),
+                """INSERT INTO entries (text, timestamp, embedding, app, title, language, event_id, is_processed)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(timestamp) DO NOTHING""",
+                (text, timestamp, embedding_bytes, app, title, language, event_id, is_processed),
             )
             conn.commit()
-            if cursor.rowcount > 0:  # Check if insert actually happened
+            if cursor.rowcount > 0:
                 last_row_id = cursor.lastrowid
-            # else:
-            # Optionally log that a duplicate timestamp was encountered
-            # print(f"Skipped inserting entry with duplicate timestamp: {timestamp}")
-
     except sqlite3.Error as e:
-        # More specific error handling can be added (e.g., IntegrityError for UNIQUE constraint)
         print(f"Database error during insertion: {e}")
     return last_row_id
 
 
+def update_entry_embedding(entry_id: int, embedding: np.ndarray) -> bool:
+    embedding_bytes: bytes = embedding.astype(np.float32).tobytes()
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE entries SET embedding = ? WHERE id = ?",
+                (embedding_bytes, entry_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Database error during update: {e}")
+        return False
+
+
 def get_entries_by_time_range(start_time: int, end_time: int) -> List[Entry]:
+    # Simplified for now, might need full hydration like get_all_entries
+    # But for legacy search it might be enough.
+    # Let's implement it properly.
+    entries: List[Entry] = []
     with sqlite3.connect(db_path) as conn:
-        c = conn.cursor()
-        results = c.execute(
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
             "SELECT * FROM entries WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
             (start_time, end_time),
-        ).fetchall()
-        return [Entry(*result) for result in results]
+        )
+        results = cursor.fetchall()
+        for row in results:
+            embedding = np.frombuffer(
+                row["embedding"], dtype=np.float32
+            ) if row["embedding"] else None
+            entries.append(
+                Entry(
+                    id=row["id"],
+                    app=row["app"],
+                    title=row["title"],
+                    text=row["text"],
+                    timestamp=row["timestamp"],
+                    embedding=embedding,
+                    language=row["language"],
+                    event_id=row["event_id"],
+                    is_processed=bool(row["is_processed"])
+                )
+            )
+    return entries
 
 
 def get_unique_apps() -> List[str]:
-    """
-    Retrieves a list of unique application names from the database.
-
-    Returns:
-        List[str]: A list of unique application names.
-    """
     apps: List[str] = []
     try:
         with sqlite3.connect(db_path) as conn:
@@ -179,12 +230,6 @@ def get_unique_apps() -> List[str]:
 
 
 def get_unique_languages() -> List[str]:
-    """
-    Retrieves a list of unique languages from the database.
-
-    Returns:
-        List[str]: A list of unique languages.
-    """
     languages: List[str] = []
     try:
         with sqlite3.connect(db_path) as conn:
@@ -198,15 +243,6 @@ def get_unique_languages() -> List[str]:
 
 
 def get_activity_digest(time_range: str) -> dict:
-    """
-    Retrieves a digest of the user's activity over a given time range.
-
-    Args:
-        time_range (str): The time range for the digest ("day" or "week").
-
-    Returns:
-        dict: A dictionary containing the most frequent apps and words.
-    """
     if time_range == "day":
         start_time = int(time.time()) - 86400
     elif time_range == "week":
@@ -218,13 +254,11 @@ def get_activity_digest(time_range: str) -> dict:
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            # Most frequent apps
             cursor.execute(
                 "SELECT app, COUNT(*) as count FROM entries WHERE timestamp >= ? GROUP BY app ORDER BY count DESC LIMIT 5",
                 (start_time,),
             )
             digest["apps"] = cursor.fetchall()
-            # Most frequent words
             cursor.execute(
                 "SELECT text FROM entries WHERE timestamp >= ?", (start_time,)
             )
@@ -239,3 +273,147 @@ def get_activity_digest(time_range: str) -> dict:
     except sqlite3.Error as e:
         print(f"Database error while fetching activity digest: {e}")
     return digest
+
+# --- New Event Functions ---
+
+def insert_event(event: dict) -> str:
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT INTO events (id, start_time, end_time, title, description, type, stats, hero_image, thumbnails, tags)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   end_time=excluded.end_time,
+                   title=excluded.title,
+                   description=excluded.description,
+                   stats=excluded.stats,
+                   thumbnails=excluded.thumbnails,
+                   tags=excluded.tags
+                   """,
+                (
+                    event["id"],
+                    event["start_time"],
+                    event["end_time"],
+                    event["title"],
+                    event["description"],
+                    event["type"],
+                    json.dumps(event["stats"]),
+                    event["hero_image"],
+                    json.dumps(event["thumbnails"]),
+                    json.dumps(event["tags"]),
+                ),
+            )
+            conn.commit()
+            return event["id"]
+    except sqlite3.Error as e:
+        print(f"Database error during event insertion: {e}")
+        return None
+
+def get_events(limit: int = 50, offset: int = 0) -> List[Event]:
+    events = []
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM events ORDER BY start_time DESC LIMIT ? OFFSET ?",
+                (limit, offset)
+            )
+            results = cursor.fetchall()
+            for row in results:
+                events.append(Event(
+                    id=row["id"],
+                    start_time=row["start_time"],
+                    end_time=row["end_time"],
+                    title=row["title"],
+                    description=row["description"],
+                    type=row["type"],
+                    stats=json.loads(row["stats"]),
+                    hero_image=row["hero_image"],
+                    thumbnails=json.loads(row["thumbnails"]),
+                    tags=json.loads(row["tags"])
+                ))
+    except sqlite3.Error as e:
+        print(f"Database error fetching events: {e}")
+    return events
+
+def get_event_by_id(event_id: str) -> Optional[Event]:
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+            row = cursor.fetchone()
+            if row:
+                return Event(
+                    id=row["id"],
+                    start_time=row["start_time"],
+                    end_time=row["end_time"],
+                    title=row["title"],
+                    description=row["description"],
+                    type=row["type"],
+                    stats=json.loads(row["stats"]),
+                    hero_image=row["hero_image"],
+                    thumbnails=json.loads(row["thumbnails"]),
+                    tags=json.loads(row["tags"])
+                )
+    except sqlite3.Error as e:
+        print(f"Database error fetching event: {e}")
+    return None
+
+# --- Job Functions ---
+
+def insert_job(job_type: str, payload: dict) -> int:
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            now = int(time.time())
+            cursor.execute(
+                "INSERT INTO jobs (type, payload, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (job_type, json.dumps(payload), "pending", now, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    except sqlite3.Error as e:
+        print(f"Database error inserting job: {e}")
+        return -1
+
+def get_pending_jobs(limit: int = 10) -> List[Job]:
+    jobs = []
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM jobs WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?",
+                (limit,)
+            )
+            results = cursor.fetchall()
+            for row in results:
+                jobs.append(Job(
+                    id=row["id"],
+                    type=row["type"],
+                    payload=json.loads(row["payload"]),
+                    status=row["status"],
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"]
+                ))
+    except sqlite3.Error as e:
+        print(f"Database error fetching jobs: {e}")
+    return jobs
+
+def update_job_status(job_id: int, status: str) -> bool:
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            now = int(time.time())
+            cursor.execute(
+                "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
+                (status, now, job_id)
+            )
+            conn.commit()
+            return True
+    except sqlite3.Error as e:
+        print(f"Database error updating job: {e}")
+        return False

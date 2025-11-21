@@ -4,6 +4,7 @@ import { apiClient } from './client'
 // Query keys
 export const queryKeys = {
   entries: ['entries'] as const,
+  events: ['events'] as const,
 }
 
 // Get all entries
@@ -25,3 +26,20 @@ export function useTogglePause() {
     },
   })
 }
+
+// Get events
+export function useEvents(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: [...queryKeys.events, limit, offset],
+    queryFn: () => apiClient.getEvents(limit, offset),
+    staleTime: 1000 * 60, // 1 minute
+  })
+}
+
+// Run job mutation
+export function useRunJob() {
+  return useMutation({
+    mutationFn: apiClient.runJob,
+  })
+}
+

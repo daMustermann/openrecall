@@ -109,13 +109,20 @@ python -m openrecall.app
 - **Everything served at:** http://localhost:8082
 - Backend serves the built React frontend + API
 
-#### Option 3: Windows Quick Launch
+#### Option 3: Unified Launch (Recommended)
+Run the unified launch script:
+```bash
+python start.py
+```
+This will check your environment and launch the application.
+
+#### Option 4: Windows Quick Launch
 Create `start-openrecall.bat` in the project root:
 ```bat
 @echo off
 cd /d F:\Coding\openrecall
 call .venv\Scripts\activate.bat
-python -m openrecall.app
+python start.py
 pause
 ```
 Double-click to launch (update the path as needed).
